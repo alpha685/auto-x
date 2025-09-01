@@ -64,6 +64,7 @@ wss.on('connection', (ws) => {
                 keywords: ['looking for startup advice', 'need marketing tips'],
                 // Safe, generic message templates
                 messageTemplates: ["Hi {username}! Saw your tweet and thought I'd connect."],
+                isDemo: true // Add a flag to signify this is the web demo
             };
 
             // Start streaming logs to the client
