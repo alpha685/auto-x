@@ -51,66 +51,49 @@ class TwitterBot {
             await this.page.goto("https://x.com/login", { waitUntil: 'domcontentloaded' });
 
             console.log("📝 Entering username...");
-            // Wait for username field and enter username
-            const usernameInput = this.page.locator('input[autocomplete="username"]');
-            await usernameInput.waitFor({ state: 'visible', timeout: 15000 });
+            // Use a more robust selector for the username/email/phone input.
+            // getByLabel is less likely to break with UI changes than specific attributes.
+            // Increase timeout to 30s to handle slow loading on platforms like Render.
+            const usernameInput = this.page.getByLabel(/phone, email, or username/i);
+            await usernameInput.waitFor({ state: 'visible', timeout: 30000 });
             await usernameInput.fill(this.config.username);
             
             // Click Next button
             await this.page.click('button[role="button"]:has-text("Next")');
 
-            // After clicking Next, Twitter may ask for a password directly,
-            // or it may ask for a phone/email for verification. We need to handle both cases.
-            console.log("🔍 Checking for password or verification screen...");
+            // After clicking Next, Twitter may ask for a password, or it may ask for a phone/username to resolve ambiguity.
+            console.log("🔍 Checking for password or disambiguation screen...");
             const passwordInput = this.page.locator('input[name="password"]');
-            const verificationInput = this.page.locator('input[data-testid="ocf-challenge-input"]');
-            const usernameOrPhoneInput = this.page.locator('input[name="text"][autocapitalize="none"]');
+            const disambiguationInput = this.page.getByLabel(/phone number or username/i);
             const alertError = this.page.locator('[role="alert"]');
 
             try {
-                // After the first "Next", wait for one of:
-                // 1. The password input (if username was unambiguous).
-                // 2. Another text input (if Twitter asks for username/phone to disambiguate).
-                // 3. A known verification challenge input.
-                // 4. An error message.
+                // Wait for the next screen to be either the password input, the disambiguation input, or an error.
                 await Promise.race([
                     passwordInput.waitFor({ state: 'visible', timeout: 25000 }),
-                    verificationInput.waitFor({ state: 'visible', timeout: 25000 }),
-                    usernameOrPhoneInput.waitFor({ state: 'visible', timeout: 25000 }),
+                    disambiguationInput.waitFor({ state: 'visible', timeout: 25000 }),
                     alertError.waitFor({ state: 'visible', timeout: 10000 }),
                 ]);
             } catch (e) {
-                throw new Error('Timed out waiting for password, verification, or error screen after entering username. The login flow may have changed.');
+                throw new Error('Timed out waiting for password, disambiguation, or error screen after entering username. The login flow may have changed.');
             }
 
             // Handle error alert
             if (await alertError.isVisible()) {
                 const errorText = await alertError.innerText();
-                throw new Error(`Login failed. Twitter displayed an error after username: "${errorText}"`);
+                throw new Error(`Twitter displayed an error after username: "${errorText}"`);
             }
 
             // This handles the case where Twitter asks for a username or phone number to disambiguate an email login.
-            if (await usernameOrPhoneInput.isVisible()) {
+            if (await disambiguationInput.isVisible()) {
                 console.log("📱 Additional verification required (username/phone).");
                 if (!this.config.phoneOrEmail) {
                     throw new Error('Twitter is asking for username/phone for verification, but none is provided in .env file. Please set TWITTER_PHONE or TWITTER_EMAIL.');
                 }
                 console.log("➡️ Entering username/phone for verification...");
-                await usernameOrPhoneInput.fill(this.config.phoneOrEmail);
+                await disambiguationInput.fill(this.config.phoneOrEmail);
                 await this.page.click('button[role="button"]:has-text("Next")');
             }
-
-            // If the verification input is visible, it means Twitter is asking for a phone number or email.
-            if (await verificationInput.isVisible()) {
-                console.log("📱 Additional verification required by Twitter.");
-                if (this.config.phoneOrEmail) {
-                    console.log("➡️ Entering phone/email for verification...");
-                    await verificationInput.fill(this.config.phoneOrEmail);
-                    await this.page.click('button[role="button"]:has-text("Next")');
-                } else {
-                    throw new Error('Twitter is asking for phone/email verification, but none is provided in .env file. Please set TWITTER_PHONE or TWITTER_EMAIL.');
-                }
-            } 
 
             console.log("🔑 Entering password...");
             await passwordInput.waitFor({ state: 'visible', timeout: 15000 });
@@ -166,11 +149,11 @@ class TwitterBot {
             }
             
             // Re-throw a more specific error to the caller
-            if (error.message.includes('CAPTCHA') || error.message.includes('Unusual activity') || error.message.includes('error message')) {
-                throw new Error(`Twitter login failed: ${error.message}`);
+            if (error.message.includes('CAPTCHA') || error.message.includes('Unusual activity') || error.message.includes('Twitter displayed an error')) {
+                throw new Error(`Login failed due to a security check or error from Twitter: ${error.message}`);
             }
             
-            throw new Error(`Twitter login failed: Timed out waiting for home page. The page might be showing an unexpected screen (e.g., CAPTCHA, new user onboarding, or a different error). Check login_error.png for details. Original error: ${error.message}`);
+            throw new Error(`Twitter login failed. The login page did not behave as expected. Check login_error.png for details. Original error: ${error.message}`);
         }
     }
 
