@@ -1,31 +1,11 @@
 // Load environment variables
 require("dotenv").config();
 
-// --- DIAGNOSTIC ---
-// Let's see what files are actually in the src directory on the server.
-const fs = require('fs');
-const path = require('path');
-
-// Check for the file with the EXACT case before trying to require it.
-const mockScraperPath = path.join(__dirname, 'MockLeadScraper.js');
-if (!fs.existsSync(mockScraperPath)) {
-    console.error('--- DIAGNOSTIC ERROR ---');
-    console.error(`CRITICAL: The file 'MockLeadScraper.js' was NOT found at ${mockScraperPath}.`);
-    const srcDirContents = fs.readdirSync(__dirname);
-    console.error('Actual contents of the /app/src/ directory are:');
-    console.error(srcDirContents.join('\n'));
-    console.error('Please check for typos or case-sensitivity issues in the filename.');
-    console.error('--------------------------');
-    // Exit early to prevent the less-clear 'MODULE_NOT_FOUND' error
-    process.exit(1);
-}
-
-
 // Import configuration and core components
 const config = require('./config/config.js');
 const { TwitterBot } = require('./TwitterBot.js');
 const { LeadScraper } = require('./LeadScraper.js'); // For real mode
-const { MockLeadScraper } = require('./MockLeadScraper.js'); // For demo mode
+const { MockLeadScraper } = require('./mockleadscraper.js'); // For demo mode - FIX: Corrected filename case
 const { GoogleSheetsManager } = require('./GoogleSheetsManager.js');
 const { FilterEngine } = require('./FilterEngine.js');
 const { EngagementScheduler } = require('./EngagementScheduler.js');
@@ -36,7 +16,7 @@ class TwitterAutomationSystem {
         // This allows the UI to override credentials, keywords, etc.
         const dynamicConfig = { ...config };
         dynamicConfig.twitter.username = userConfig.twitterUsername || config.twitter.username;
-        dynamicConfig.twitter.password = user-giconfig.twitter.password;
+        dynamicConfig.twitter.password = userConfig.twitterPassword || config.twitter.password; // FIX: Corrected typo from user-giconfig
         dynamicConfig.scraping.keywords = userConfig.keywords || config.scraping.keywords;
         dynamicConfig.messageTemplates = userConfig.messageTemplates || config.messageTemplates;
         this.isDemo = userConfig.isDemo || false;
