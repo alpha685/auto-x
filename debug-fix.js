@@ -46,6 +46,12 @@ async function diagnoseAndFix() {
     
     // Step 2: Test Google Sheets
     console.log('2️⃣ Testing Google Sheets connection...');
+    // Add a check for Node version and suggest the fix
+    const nodeMajorVersion = parseInt(process.versions.node.split('.')[0], 10);
+    if (nodeMajorVersion >= 17) {
+        console.log(`ℹ️  Running on Node.js v${nodeMajorVersion}. If this test fails with a DECODER error, you may need to run the app with the --openssl-legacy-provider flag.`);
+    }
+
     try {
         // Check if required files exist
         const fs = require('fs');
