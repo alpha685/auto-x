@@ -17,4 +17,4 @@ COPY . .
 EXPOSE 3000
 
 # The command to run your application when the container starts.
-CMD ["npm", "start"]
+CMD ["node", "--openssl-legacy-provider", "server.js"]
