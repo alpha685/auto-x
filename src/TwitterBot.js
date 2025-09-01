@@ -107,13 +107,16 @@ class TwitterBot {
             // Wait for login success OR a known failure condition
             console.log("⏳ Waiting for login to complete...");
 
-            // Define locators for all possible outcomes after submitting the password.
             const successLocator = this.page.locator(
                 '[data-testid="SideNav_AccountSwitcher_Button"], [aria-label="Home timeline"], [data-testid="AppTabBar_Home_Link"]'
             );
-            const errorLocator = this.page.locator('[data-testid="toast"], [role="alert"]:has-text-matches(/wrong password|something went wrong|try again/i)');
+            // FIX: The :has-text-matches pseudo-class is not standard and causes a SyntaxError.
+            // We will use a simpler selector and check for specific error text if the element appears.
+            const errorLocator = this.page.locator('[data-testid="toast"], [role="alert"]');
             const captchaLocator = this.page.locator('iframe[title*="CAPTCHA"], iframe[src*="recaptcha"]');
             const unusualActivityLocator = this.page.locator('*:text-matches("unusual activity", "i")');
+            // NEW: Add a locator for the OTP/verification code screen.
+            const verificationInputLocator = this.page.locator('input[data-testid="ocf-challenge-input"], input[name="challenge_response"]');
 
             // Wait for ANY of the key outcomes to appear. This is more robust than racing different timeouts.
             try {
@@ -123,13 +126,17 @@ class TwitterBot {
                     errorLocator.first().waitFor({ state: 'visible', timeout: 60000 }),
                     captchaLocator.first().waitFor({ state: 'visible', timeout: 60000 }),
                     unusualActivityLocator.first().waitFor({ state: 'visible', timeout: 60000 }),
+                    verificationInputLocator.first().waitFor({ state: 'visible', timeout: 60000 }),
                 ]);
             } catch (e) {
                 // This will now only throw if ALL locators fail to appear within 60 seconds.
-                throw new Error(`Timed out waiting for any post-login element (success, error, captcha, etc.). The login process is stuck. Original error: ${e.message}`);
+                throw new Error(`Timed out waiting for any post-login element (success, error, captcha, etc.). The login process is stuck. Original error: ${e.message.split('\n')[0]}`);
             }
 
             // Now that we know *something* has appeared, check which one it was in order of severity.
+            if (await verificationInputLocator.first().isVisible({ timeout: 1000 })) {
+                throw new Error('Login failed: Twitter is asking for an OTP or verification code. This happens when logging in from a new location (like a server). Please disable 2FA on the bot account or log in from a browser on the server to approve the location.');
+            }
             if (await captchaLocator.first().isVisible({ timeout: 1000 })) {
                 throw new Error('Login failed: CAPTCHA detected. Please log in manually in a headed browser to solve it.');
             }
@@ -140,7 +147,7 @@ class TwitterBot {
                 const errorText = await errorLocator.first().innerText();
                 throw new Error(`Login failed with an error message: "${errorText}"`);
             }
-            
+
             this.isLoggedIn = true;
             console.log("✅ Successfully logged into Twitter");
             
@@ -150,10 +157,10 @@ class TwitterBot {
             
             // Re-throw a more specific error to the caller
             if (error.message.includes('CAPTCHA') || error.message.includes('Unusual activity') || error.message.includes('Twitter displayed an error')) {
-                throw new Error(`Login failed due to a security check or error from Twitter: ${error.message}`);
+                throw new Error(`Login failed due to a security check or error from Twitter: ${error.message.split('\n')[0]}`);
             }
             
-            throw new Error(`Twitter login failed. The login page did not behave as expected. Check login_error.png for details. Original error: ${error.message}`);
+            throw new Error(`Twitter login failed. The login page did not behave as expected. Check login_error.png for details. Original error: ${error.message.split('\n')[0]}`);
         }
     }
 
