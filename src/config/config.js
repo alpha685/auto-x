@@ -7,37 +7,24 @@ function validateEnvVars() {
         // 'TWITTER_USERNAME',
         // 'TWITTER_PASSWORD',
         'GOOGLE_SHEETS_ID',
-        'GOOGLE_SERVICE_EMAIL',
+        'GOOGLE_CREDENTIALS_JSON' // New, single variable for all Google creds
     ];
     
     const missing = required.filter(key => !process.env[key]);
     
     if (missing.length > 0) {
         console.error('❌ Missing required environment variables:');
-        missing.forEach(key => console.error(`  - ${key}`));
-        console.error('\nPlease check your .env file and ensure all required variables are set.');
-        process.exit(1);
-    }
-
-    // Special check for the private key, which can be a file or an env var
-    if (!process.env.GOOGLE_PRIVATE_KEY && !process.env.GOOGLE_PRIVATE_KEY_PATH) {
-        console.error('❌ Missing required environment variable: GOOGLE_PRIVATE_KEY or GOOGLE_PRIVATE_KEY_PATH');
+        console.error(`  - ${missing.join(', ')}`);
+        console.error('\nPlease add GOOGLE_CREDENTIALS_JSON to your environment variables. It should contain the full content of your service account JSON file.');
         process.exit(1);
     }
     
     console.log('✅ All required environment variables are present');
 }
 
-// Only validate if this is not a test environment
 if (!process.env.NODE_ENV || process.env.NODE_ENV !== 'test') {
     validateEnvVars();
 }
-
-// Read the private key from a file if the path is provided (for Render),
-// otherwise use the environment variable (for local).
-const privateKey = process.env.GOOGLE_PRIVATE_KEY_PATH
-    ? fs.readFileSync(process.env.GOOGLE_PRIVATE_KEY_PATH, 'utf8')
-    : process.env.GOOGLE_PRIVATE_KEY;
 
 module.exports = {
     // Twitter credentials
@@ -49,9 +36,8 @@ module.exports = {
 
     // Google Sheets configuration
     googleSheets: {
-        spreadsheetId: process.env.GOOGLE_SHEETS_ID,
-        clientEmail: process.env.GOOGLE_SERVICE_EMAIL,
-        privateKey: privateKey
+        spreadsheetId: process.env.GOOGLE_SHEETS_ID, // Still need this
+        credentialsJson: process.env.GOOGLE_CREDENTIALS_JSON // Pass the whole JSON string
     },
 
     // Scraping configuration
