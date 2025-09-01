@@ -8,8 +8,8 @@ const { JWT } = require('google-auth-library');
  */
 class GoogleSheetsManager {
     constructor(config) {
-        if (!config || !config.spreadsheetId || !config.clientEmail || !config.privateKey) {
-            throw new Error("GoogleSheetsManager requires a valid configuration object.");
+        if (!config || !config.spreadsheetId || !config.credentialsJson) {
+            throw new Error("GoogleSheetsManager requires spreadsheetId and credentialsJson in config.");
         }
         this.config = config;
         this.doc = null;
@@ -24,9 +24,12 @@ class GoogleSheetsManager {
         try {
             console.log("🔧 Connecting to Google Sheets...");
             
+            // Parse the credentials from the JSON string
+            const creds = JSON.parse(this.config.credentialsJson);
+            
             const serviceAccountAuth = new JWT({
-                email: this.config.clientEmail,
-                key: this.config.privateKey.replace(/\\n/g, '\n'),
+                email: creds.client_email,
+                key: creds.private_key, // The key is already correctly formatted in the JSON
                 scopes: [
                     'https://www.googleapis.com/auth/spreadsheets',
                     'https://www.googleapis.com/auth/drive.file',
@@ -45,7 +48,11 @@ class GoogleSheetsManager {
             
             console.log("✅ Google Sheets initialized successfully");
         } catch (error) {
-            this.handleConnectionError(error);
+            // Add a check for JSON parsing errors
+            if (error instanceof SyntaxError) {
+                console.error("\n❌ CRITICAL: Failed to parse GOOGLE_CREDENTIALS_JSON. Please ensure it's a valid JSON string copied directly from your service account file.");
+            }
+            this.handleConnectionError(error); // This will re-throw
         }
     }
 
@@ -380,17 +387,25 @@ class GoogleSheetsManager {
         console.error("❌ Google Sheets initialization failed:", error.message);
         if (error.response?.data?.error) {
             const { code, message } = error.response.data.error;
-            console.error(`  -> API Error ${code}: ${message}`);
+            console.error(`  -> API Error Code ${code}: ${message}`);
         }
         if (error.message.includes('403') || error.message.includes('permission denied') || error.message.includes('does not have permission')) {
             console.error("\n🔧 This is a PERMISSION ERROR. Please check the following:");
-            console.error(`1. The Google Sheet is shared with this EXACT email: ${this.config.clientEmail}`);
+            try {
+                const creds = JSON.parse(this.config.credentialsJson);
+                console.error(`1. The Google Sheet is shared with this EXACT email: ${creds.client_email}`);
+            } catch (e) {
+                console.error("1. The Google Sheet is shared with the service account email from your credentials file.");
+            }
             console.error("2. The permission level for that email is set to 'Editor'.");
             console.error("3. The 'Google Sheets API' and 'Google Drive API' are ENABLED in your Google Cloud project.");
         } else if (error.message.includes('404') || error.message.includes('requested entity was not found')) {
             console.error("\n🔧 This is a NOT FOUND ERROR. Please check your GOOGLE_SHEETS_ID in the .env file.");
         } else if (error.message.includes('invalid_grant')) {
-            console.error("\n🔧 This is an AUTHENTICATION ERROR. Please check your GOOGLE_SERVICE_EMAIL and GOOGLE_PRIVATE_KEY in the .env file.");
+            console.error("\n🔧 This is an AUTHENTICATION ERROR (invalid_grant). This usually means there's an issue with the credentials JSON.");
+            console.error("   Please re-download your service account JSON file from Google Cloud and update the GOOGLE_CREDENTIALS_JSON environment variable.");
+        } else if (error.message.includes('DECODER routines::unsupported')) {
+            console.error("\n🔧 This is a CRYPTOGRAPHIC ERROR. It means the private key format is incompatible. This solution should have fixed it, which is very strange. Please double-check that the GOOGLE_CREDENTIALS_JSON is an exact copy of the file from Google Cloud.");
         }
         throw error;
     }
