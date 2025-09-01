@@ -4,7 +4,8 @@ require("dotenv").config();
 // Import configuration and core components
 const config = require('./config/config.js');
 const { TwitterBot } = require('./TwitterBot.js');
-const { LeadScraper } = require('./LeadScraper.js');
+const { LeadScraper } = require('./LeadScraper.js'); // For real mode
+const { MockLeadScraper } = require('./MockLeadScraper.js'); // For demo mode
 const { GoogleSheetsManager } = require('./GoogleSheetsManager.js');
 const { FilterEngine } = require('./FilterEngine.js');
 const { EngagementScheduler } = require('./EngagementScheduler.js');
@@ -18,13 +19,22 @@ class TwitterAutomationSystem {
         dynamicConfig.twitter.password = userConfig.twitterPassword || config.twitter.password;
         dynamicConfig.scraping.keywords = userConfig.keywords || config.scraping.keywords;
         dynamicConfig.messageTemplates = userConfig.messageTemplates || config.messageTemplates;
+        this.isDemo = userConfig.isDemo || false;
 
         // Initialize all components
         this.scheduler = new EngagementScheduler(dynamicConfig);
         this.filterEngine = new FilterEngine(dynamicConfig.filterRules);
         this.sheetsManager = new GoogleSheetsManager(dynamicConfig.googleSheets);
-        this.leadScraper = new LeadScraper();
-        this.twitterBot = new TwitterBot(dynamicConfig.twitter); // Initialize bot with config
+
+        // Conditionally initialize scraper and bot based on mode
+        if (this.isDemo) {
+            console.log("🤖 Running in DEMO MODE. Using mock scraper and skipping login.");
+            this.leadScraper = new MockLeadScraper();
+            this.twitterBot = null; // No real bot needed for the demo
+        } else {
+            this.leadScraper = new LeadScraper();
+            this.twitterBot = new TwitterBot(dynamicConfig.twitter);
+        }
 
         this.errorCount = 0;
         this.maxErrors = config.errorHandling.circuitBreakerThreshold;
@@ -37,17 +47,21 @@ class TwitterAutomationSystem {
     async start() {
         console.log('🌟 Twitter Automation System Starting (PRODUCTION MODE)...');
         console.log('==========================================');
-        console.log(`📅 Started at: ${new Date().toLocaleString()}`);
+        console.log(`📅 Started at: ${new Date().toLocaleString()}`); // This will be overwritten by the UI logger
         console.log(`🔧 Node version: ${process.version}`);
         console.log(`📁 Working directory: ${process.cwd()}`);
-        console.log('⚠️  MODE: Production (Real Twitter Automation)');
+        console.log(this.isDemo ? '🧪 MODE: Live Web Demo (with mock data)' : '⚠️  MODE: Production (Real Twitter Automation)');
         console.log('==========================================\n');
 
         try {
             // Validate environment and initialize critical components
             this.validateEnvironment();
             await this.sheetsManager.initialize();
-            await this.twitterBot.initialize();
+
+            // Only initialize the real Twitter bot if not in demo mode
+            if (!this.isDemo) {
+                await this.twitterBot.initialize();
+            }
 
             // Start the main automation loop
             await this.runAutomationLoop();
@@ -146,7 +160,13 @@ class TwitterAutomationSystem {
             const keyword = keywords[i];
             try {
                 console.log(`🔍 Scraping keyword ${i + 1}/${keywords.length}: "${keyword}"`);
-                const leads = await this.leadScraper.scrapeByKeyword(this.twitterBot.page, keyword, config.scraping.leadsPerKeyword || 20);
+                let leads;
+                if (this.isDemo) {
+                    // Mock scraper doesn't need a page object
+                    leads = await this.leadScraper.scrapeByKeyword(keyword, config.scraping.leadsPerKeyword || 5);
+                } else {
+                    leads = await this.leadScraper.scrapeByKeyword(this.twitterBot.page, keyword, config.scraping.leadsPerKeyword || 20);
+                }
 
                 if (leads && leads.length > 0) {
                     newLeads.push(...leads);
@@ -263,6 +283,20 @@ class TwitterAutomationSystem {
                 return;
             }
             console.log(`📅 Created engagement plan with ${dailyPlan.length} activities`);
+
+            // In demo mode, just show the plan and exit the phase
+            if (this.isDemo) {
+                console.log('\n🎯 PLANNED ACTIVITIES (PREVIEW ONLY):');
+                console.log('=====================================');
+                const activitiesToShow = dailyPlan.slice(0, 5); // Show first 5
+                for (const activity of activitiesToShow) {
+                    console.log(`- ${activity.type.toUpperCase()} for @${activity.username}`);
+                    if (activity.message) console.log(`  -> Message: "${activity.message.substring(0, 40)}..."`);
+                }
+                console.log('\n💡 In DEMO MODE - no actual engagement performed.');
+                console.log('💬 Engagement phase completed (preview only)');
+                return; // Exit phase
+            }
 
             const activitiesToExecute = dailyPlan.slice(0, config.engagement.activitiesPerCycle);
             let successCount = 0;
