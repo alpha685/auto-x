@@ -52,7 +52,10 @@ class TwitterAutomationSystem {
             // Start the main automation loop
             await this.runAutomationLoop();
         } catch (error) {
-            console.error('❌ Failed to start system:', error.message);
+            // Use console.log for max visibility in logging platforms like Render
+            console.log('❌ CRITICAL STARTUP FAILURE. The system will shut down.');
+            console.log('Error Message:', error.message);
+            console.log('Full Error Stack:', error.stack); // Log the full stack for better debugging
             await this.shutdown();
             process.exit(1);
         }
