@@ -1,0 +1,28 @@
+{
+  "name": "twitter-automation-demo",
+  "version": "1.0.0",
+  "description": "Live web demo for the Twitter automation bot.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "jest"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.1",
+    "express": "^4.19.2",
+    "google-auth-library": "^9.4.1",
+    "google-spreadsheet": "^4.1.2",
+    "node-cron": "^3.0.3",
+    "playwright": "^1.40.0",
+    "winston": "^3.11.0",
+    "ws": "^8.17.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
